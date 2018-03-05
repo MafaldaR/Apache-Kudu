@@ -20,23 +20,26 @@ function do_help {
 
 DEFAULT_KUDU_OPTS="-logtostderr \
  -fs_wal_dir=/var/lib/kudu/$1 \
- -fs_data_dirs=/var/lib/kudu/$1"
+ -fs_data_dirs=/var/lib/kudu/$1
+ -max_clock_sync_error_usec=20000000"
 
 KUDU_OPTS=${KUDU_OPTS:-${DEFAULT_KUDU_OPTS}}
 
 if [ "$1" = 'master' ]; then
-  exec kudu-master -fs_wal_dir /var/lib/kudu/master ${KUDU_OPTS}
+  exec kudu-master -max_clock_sync_error_usec=20000000 -fs_wal_dir /var/lib/kudu/master ${KUDU_OPTS
 elif [ "$1" = 'tserver' ]; then
-  exec kudu-tserver -fs_wal_dir /var/lib/kudu/tserver \
+  exec kudu-tserver -max_clock_sync_error_usec=20000000 -fs_wal_dir /var/lib/kudu/tserver \
   -tserver_master_addrs ${KUDU_MASTER} ${KUDU_OPTS}
 elif [ "$1" = 'single' ]; then
   KUDU_MASTER=boot2docker
   KUDU_MASTER_OPTS="-logtostderr \
    -fs_wal_dir=/var/lib/kudu/master \
-   -fs_data_dirs=/var/lib/kudu/master"
+   -fs_data_dirs=/var/lib/kudu/master
+   -max_clock_sync_error_usec=20000000"
   KUDU_TSERVER_OPTS="-logtostderr \
    -fs_wal_dir=/var/lib/kudu/tserver \
-   -fs_data_dirs=/var/lib/kudu/tserver"
+   -fs_data_dirs=/var/lib/kudu/tserver
+   -max_clock_sync_error_usec=20000000"
   exec kudu-master -fs_wal_dir /var/lib/kudu/master ${KUDU_MASTER_OPTS} &
   sleep 5
   exec kudu-tserver -fs_wal_dir /var/lib/kudu/tserver \

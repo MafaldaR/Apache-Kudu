@@ -2,7 +2,7 @@ FROM ubuntu:xenial
 
 # Install dependencies
 RUN apt-get update
-RUN apt-get -y install wget
+RUN apt-get -y install wget dstat ntp
 
 # Install repository and gpg key
 WORKDIR /etc/apt/sources.list.d
@@ -24,6 +24,8 @@ VOLUME /var/lib/kudu/master /var/lib/kudu/tserver
 COPY docker-entrypoint.sh /
 ENTRYPOINT ["/docker-entrypoint.sh"]
 WORKDIR /
+RUN apt-get -y install apt-utils sudo
+RUN sudo service ntp restart
 # 8051 for masters
 # 8050 for tablet servers
 
