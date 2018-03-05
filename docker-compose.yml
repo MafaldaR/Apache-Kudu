@@ -1,0 +1,24 @@
+version: '2'
+services:
+  kudu-master:
+    #image: kunickiaj/kudu
+    build: .
+    ports:
+      - 8051:8051
+    volumes:
+      - /var/lib/kudu/master
+    command: master
+    hostname: boot2docker
+  kudu-tserver:
+    #image: kunickiaj/kudu
+    build: .
+    environment:
+      - KUDU_MASTER=kudu-master
+    ports:
+      - 8050:8050
+    volumes:
+      - /var/lib/kudu/tserver
+    command: tserver
+    links:
+      - kudu-master
+    hostname: boot2docker
