@@ -1,17 +1,22 @@
 version: '2'
 services:
   kudu-master:
-    #image: kunickiaj/kudu
-    build: .
+    container_name: kudu-master
+    build:
+      context: .
+      dockerfile: Dockerfile
     ports:
       - 8051:8051
     volumes:
       - /var/lib/kudu/master
     command: master
-    hostname: boot2docker
-  kudu-tserver:
-    #image: kunickiaj/kudu
-    build: .
+    hostname: localhost
+  kudu-tserver_1:
+    container_name: kudu-tserver_1
+    privileged: true
+    build:
+      context: .
+      dockerfile: Dockerfile
     environment:
       - KUDU_MASTER=kudu-master
     ports:
@@ -21,4 +26,36 @@ services:
     command: tserver
     links:
       - kudu-master
-    hostname: boot2docker
+    hostname: localhost
+  kudu-tserver_2:
+    container_name: kudu-tserver_2
+    privileged: true
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - KUDU_MASTER=kudu-master
+    ports:
+      - 8052:8050
+    volumes:
+      - /var/lib/kudu/tserver
+    command: tserver
+    links:
+      - kudu-master
+    hostname: localhost
+  kudu-tserver_3:
+    container_name: kudu-tserver_3
+    privileged: true
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - KUDU_MASTER=kudu-master
+    ports:
+      - 8053:8050
+    volumes:
+      - /var/lib/kudu/tserver
+    command: tserver
+    links:
+      - kudu-master
+    hostname: localhost

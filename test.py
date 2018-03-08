@@ -1,93 +1,54 @@
 import kudu
-import os
-import subprocess
-import sys
-import tempfile
-import time
 from kudu.client import Partitioning
+from datetime import datetime
 
-DSTAT_COL_NAMES = ["usr", "sys", "idl", "wai", "hiq", "siq", "read", "writ", "recv", "send",
-                  "in","out","int","csw"]
+# Connect to Kudu master server
+client = kudu.connect(host='ip.kuduMaster', port=7051)
 
+# Define a schema for a new table
+builder = kudu.schema_builder()
+builder.add_column('key').type(kudu.int64).nullable(False).primary_key()
+builder.add_column('ts_val', type_=kudu.unixtime_micros, nullable=False, compression='lz4')
+schema = builder.build()
 
-def open_or_create_table(client, table, drop=False):
-  """Based on the default dstat column names create a new table indexed by a timstamp col"""
-  exists = False
-  if client.table_exists(table):
-    exists = True
-    if drop:
-      client.delete_table(table)
-      exists = False
+# Define partitioning schema
+partitioning = Partitioning().add_hash_partitions(column_names=['key'], num_buckets=3)
 
-  if not exists:
-    # Create the schema for the table, basically all float cols
-    builder = kudu.schema_builder()
-    builder.add_column("ts", kudu.int64, nullable=False, primary_key=True)
-    for col in DSTAT_COL_NAMES:
-      builder.add_column(col, kudu.float_)
-    schema = builder.build()
+# Create new table
+client.create_table('python-example2', schema, partitioning)
 
-    # Create hash partitioning buckets
-    partitioning = Partitioning().add_hash_partitions('ts', 2)
+# Open a table
+table = client.table('python-example2')
 
-    client.create_table(table, schema, partitioning)
+# Create a new session so that we can apply write operations
+session = client.new_session()
 
-  return client.table(table)
+# Insert a row
+op = table.new_insert({'key': 1, 'ts_val': datetime.utcnow()})
+session.apply(op)
 
-def append_row(table, line):
-  """The line is the raw string read from stdin, that is then splitted by , and prepended
-  with the current timestamp."""
-  data = [float(x.strip()) for x in line.split(",")]
+# Upsert a row
+op = table.new_upsert({'key': 2, 'ts_val': "2016-01-01T00:00:00.000000"})
+session.apply(op)
 
-  op = table.new_insert()
-  # Convert to microseconds
-  op["ts"] = int(time.time() * 1000000)
-  for c, v in zip(DSTAT_COL_NAMES, data):
-    op[c] = v
-  return op
+# Updating a row
+op = table.new_update({'key': 1, 'ts_val': ("2017-01-01", "%Y-%m-%d")})
+session.apply(op)
 
-def start_dstat():
-  tmpdir = tempfile.mkdtemp()
-  path = os.path.join(tmpdir, "dstat.pipe")
-  os.mkfifo(path)
-  proc = subprocess.Popen(["dstat", "-cdngy", "--output", "{0}".format(path)])
-  return proc.pid, path
+# Delete a row
+op = table.new_delete({'key': 2})
+session.apply(op)
 
-if __name__ == "__main__":
+# Flush write operations, if failures occur, capture print them.
+try:
+    session.flush()
+except kudu.KuduBadStatus as e:
+    print(session.get_pending_errors())
 
-  drop = False
+# Create a scanner and add a predicate
+scanner = table.scanner()
+scanner.add_predicate(table['ts_val'] == datetime(2017, 1, 1))
 
-  if len(sys.argv) > 1:
-    operation = sys.argv[1]
-    if operation in ["drop"]:
-      drop = True
-
-  client = kudu.connect("127.0.0.1", 8051)
-  table = open_or_create_table(client, "dstat", drop)
-
-  # Start dstat
-  dstat_id, pipe_path = start_dstat()
-
-  try:
-    # Create file handle to read from pipe
-    fid = open(pipe_path, "r")
-
-    # Create session object
-    session = client.new_session()
-    counter = 0
-
-    # The dstat output first prints uninteresting lines, skip until we find the header
-    skip = True
-    while True:
-      line  = fid.readline()
-      if line.startswith("\"usr\""):
-        skip = False
-        continue
-      if not skip:
-        session.apply(append_row(table, line))
-        counter += 1
-        if counter % 10 == 0:
-          session.flush()
-  except KeyboardInterrupt:
-    if os.path.exists(pipe_path):
-      os.remove(pipe_path)
+# Open Scanner and read all tuples
+# Note: This doesn't scale for large scans
+result = scanner.open().read_all_tuples()
